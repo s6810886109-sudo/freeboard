@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Environmental Monitoring Dashboard</title>
+    <!-- Tailwind CSS & Chart.js CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: 'Kanit', sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 glass p-6 rounded-2xl">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-emerald-400">
+                    <i class="fa-solid fa-microchip mr-2"></i>Smart Indoor Air & Environment Tracker
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">Node ID: <span id="node-id" class="text-amber-400 font-mono">--</span> | ESP32 Realtime Feed</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center space-x-3">
+                <span class="relative flex h-3 w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <span id="status-text" class="text-sm font-medium text-emerald-400">CONNECTED</span>
+                <span id="last-updated" class="text-xs text-slate-400 font-mono ml-4">Updating...</span>
+            </div>
+        </header>
+
+        <!-- Air Quality Status Banner -->
+        <div id="alert-banner" class="mb-8 p-4 rounded-xl bg-emerald-950/50 border border-emerald-500/30 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-shield-heart text-2xl text-emerald-400"></i>
+                <div>
+                    <div class="font-semibold text-emerald-300" id="air-quality-title">สภาพแวดล้อมจัดอยู่ในเกณฑ์ดีเยี่ยม</div>
+                    <div class="text-xs text-slate-300" id="air-quality-desc">ระดับ CO2 และ PM2.5 อยู่ในเกณฑ์ปลอดภัยต่อสุขภาพ</div>
+                </div>
+            </div>
+            <span class="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">NORMAL</span>
+        </div>
+
+        <!-- 6 Sensor Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Card 1: Temp -->
+            <div class="glass p-6 rounded-2xl relative overflow-hidden">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-slate-400 text-sm font-medium">อุณหภูมิ (Temperature)</p>
+                        <h2 class="text-4xl font-extrabold mt-2 text-rose-400"><span id="val-temp">--</span> <span class="text-xl">°C</span></h2>
+                    </div>
+                    <div class="p-3 bg-rose-500/10 text-rose-400 rounded-xl"><i class="fa-solid fa-temperature-high text-2xl"></i></div>
+                </div>
+            </div>
+
+            <!-- Card 2: Humidity -->
+            <div class="glass p-6 rounded-2xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-slate-400 text-sm font-medium">ความชื้น (Humidity)</p>
+                        <h2 class="text-4xl font-extrabold mt-2 text-sky-400"><span id="val-humi">--</span> <span class="text-xl">%</span></h2>
+                    </div>
+                    <div class="p-3 bg-sky-500/10 text-sky-400 rounded-xl"><i class="fa-solid fa-droplet text-2xl"></i></div>
+                </div>
+            </div>
+
+            <!-- Card 3: Light -->
+            <div class="glass p-6 rounded-2xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-slate-400 text-sm font-medium">แสงสว่าง (Light Intensity)</p>
+                        <h2 class="text-4xl font-extrabold mt-2 text-amber-400"><span id="val-light">--</span> <span class="text-xl">lx</span></h2>
+                    </div>
+                    <div class="p-3 bg-amber-500/10 text-amber-400 rounded-xl"><i class="fa-solid fa-sun text-2xl"></i></div>
+                </div>
+            </div>
+
+            <!-- Card 4: CO2 -->
+            <div class="glass p-6 rounded-2xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-slate-400 text-sm font-medium">คาร์บอนไดออกไซด์ (CO2)</p>
+                        <h2 class="text-4xl font-extrabold mt-2 text-emerald-400"><span id="val-co2">--</span> <span class="text-xl">ppm</span></h2>
+                    </div>
+                    <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl"><i class="fa-solid fa-wind text-2xl"></i></div>
+                </div>
+            </div>
+
+            <!-- Card 5: PM2.5 -->
+            <div class="glass p-6 rounded-2xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-slate-400 text-sm font-medium">ฝุ่นละออง (PM2.5)</p>
+                        <h2 class="text-4xl font-extrabold mt-2 text-purple-400"><span id="val-pm25">--</span> <span class="text-xl">µg/m³</span></h2>
+                    </div>
+                    <div class="p-3 bg-purple-500/10 text-purple-400 rounded-xl"><i class="fa-solid fa-smog text-2xl"></i></div>
+                </div>
+            </div>
+
+            <!-- Card 6: Pressure -->
+            <div class="glass p-6 rounded-2xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-slate-400 text-sm font-medium">ความดันอากาศ (Air Pressure)</p>
+                        <h2 class="text-4xl font-extrabold mt-2 text-indigo-400"><span id="val-pressure">--</span> <span class="text-xl">hPa</span></h2>
+                    </div>
+                    <div class="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl"><i class="fa-solid fa-gauge-high text-2xl"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Realtime Chart Section -->
+        <div class="glass p-6 rounded-2xl">
+            <h3 class="text-lg font-semibold text-slate-200 mb-4 flex items-center">
+                <i class="fa-solid fa-chart-line mr-2 text-cyan-400"></i>แนวโน้มย้อนหลัง 15 รายการล่าสุด (Historical Trends)
+            </h3>
+            <div class="h-80">
+                <canvas id="historyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // กำหนด Database URL และ Node Name ปลายทาง
+        const DB_BASE_URL = "https://iot-109-default-rtdb.asia-southeast1.firebasedatabase.app";
+        const NODE_NAME = "lab/esp32-01"; 
+
+        document.getElementById('node-id').innerText = NODE_NAME;
+
+        // Chart Initialization
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        const historyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Temp (°C)', borderColor: '#f43f5e', data: [], tension: 0.3 },
+                    { label: 'Humi (%)', borderColor: '#38bdf8', data: [], tension: 0.3 },
+                    { label: 'Light (lx)', borderColor: '#fbbf24', data: [], tension: 0.3 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#94a3b8' } } },
+                scales: {
+                    x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+
+        // ดึงข้อมูล Latest แบบ Realtime Polling
+        async function fetchLatest() {
+            try {
+                const res = await fetch(`${DB_BASE_URL}/${NODE_NAME}/latest.json`);
+                const data = await res.json();
+                if (data) {
+                    document.getElementById('val-temp').innerText = data.temp !== undefined ? data.temp.toFixed(1) : '--';
+                    document.getElementById('val-humi').innerText = data.humi !== undefined ? data.humi.toFixed(1) : '--';
+                    document.getElementById('val-light').innerText = data.light !== undefined ? data.light.toFixed(0) : '--';
+                    document.getElementById('val-co2').innerText = data.co2 !== undefined ? data.co2.toFixed(0) : '--';
+                    document.getElementById('val-pm25').innerText = data.pm25 !== undefined ? data.pm25.toFixed(1) : '--';
+                    document.getElementById('val-pressure').innerText = data.pressure !== undefined ? data.pressure.toFixed(1) : '--';
+
+                    if (data.timestamp) {
+                        const date = new Date(data.timestamp * 1000);
+                        document.getElementById('last-updated').innerText = 'อัปเดตล่าสุด: ' + date.toLocaleTimeString('th-TH');
+                    }
+
+                    // Logic ประเมินคุณภาพอากาศ
+                    const alertBanner = document.getElementById('alert-banner');
+                    if ((data.co2 && data.co2 > 1000) || (data.pm25 && data.pm25 > 50)) {
+                        alertBanner.className = "mb-8 p-4 rounded-xl bg-rose-950/50 border border-rose-500/30 flex items-center justify-between";
+                        document.getElementById('air-quality-title').innerText = "คำเตือน: คุณภาพอากาศอยู่ในเกณฑ์เริ่มมีผลกระทบ";
+                        document.getElementById('air-quality-desc').innerText = "ระดับ CO2 หรือ PM2.5 สูงเกินมาตรฐาน ควรเปิดระบบระบายอากาศ";
+                    } else {
+                        alertBanner.className = "mb-8 p-4 rounded-xl bg-emerald-950/50 border border-emerald-500/30 flex items-center justify-between";
+                        document.getElementById('air-quality-title').innerText = "สภาพแวดล้อมจัดอยู่ในเกณฑ์ดีเยี่ยม";
+                        document.getElementById('air-quality-desc').innerText = "ระดับ CO2 และ PM2.5 อยู่ในเกณฑ์ปลอดภัยต่อสุขภาพ";
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching latest:", err);
+            }
+        }
+
+        // ดึงประวัติย้อนหลัง 15 รายการล่าสุดจาก /history
+        async function fetchHistory() {
+            try {
+                const res = await fetch(`${DB_BASE_URL}/${NODE_NAME}/history.json?orderBy="$key"&limitToLast=15`);
+                const data = await res.json();
+                if (data) {
+                    const labels = [];
+                    const tempArr = [], humiArr = [], lightArr = [];
+
+                    Object.values(data).forEach(item => {
+                        if (item.timestamp) {
+                            const timeStr = new Date(item.timestamp * 1000).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                            labels.push(timeStr);
+                        } else {
+                            labels.push('');
+                        }
+                        tempArr.push(item.temp ?? null);
+                        humiArr.push(item.humi ?? null);
+                        lightArr.push(item.light ?? null);
+                    });
+
+                    historyChart.data.labels = labels;
+                    historyChart.data.datasets[0].data = tempArr;
+                    historyChart.data.datasets[1].data = humiArr;
+                    historyChart.data.datasets[2].data = lightArr;
+                    historyChart.update();
+                }
+            } catch (err) {
+                console.error("Error fetching history:", err);
+            }
+        }
+
+        // Fetch Loop ทุกๆ 3 วินาที
+        setInterval(() => {
+            fetchLatest();
+            fetchHistory();
+        }, 3000);
+
+        fetchLatest();
+        fetchHistory();
+    </script>
+</body>
+</html>
